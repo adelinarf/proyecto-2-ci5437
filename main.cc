@@ -1,17 +1,12 @@
-// Game of Othello -- Example of main
-// Universidad Simon Bolivar, 2012.
-// Author: Blai Bonet
-// Last Revision: 1/11/16
-// Modified by: 
-
 #include <iostream>
 #include <limits>
 #include "othello_cut.h" // won't work correctly until .h is fixed!
 #include "utils.h"
-
+#include <algorithm>
 #include <unordered_map>
-
 using namespace std;
+int INFINITY = numeric_limits<int>::max();
+
 
 unsigned expanded = 0;
 unsigned generated = 0;
@@ -36,20 +31,134 @@ class hash_table_t : public unordered_map<state_t, stored_info_t, hash_function_
 
 hash_table_t TTable[2];
 
-//int maxmin(state_t state, int depth, bool use_tt);
-//int minmax(state_t state, int depth, bool use_tt = false);
-//int maxmin(state_t state, int depth, bool use_tt = false);
 int negamax(state_t state, int depth, int color, bool use_tt = false);
 int negamax(state_t state, int depth, int alpha, int beta, int color, bool use_tt = false);
 int scout(state_t state, int depth, int color, bool use_tt = false);
 int negascout(state_t state, int depth, int alpha, int beta, int color, bool use_tt = false);
+
+//Funcion que verifica si a es mayor que b
+bool greaterThan(int a, int b){
+    return a > b;
+}
+
+//Funcion que verifica si a es mayor o igual que b
+bool greaterEqualThan(int a, int b){
+    return a >= b;
+}
+
+//Funcion que implementa el algoritmo negamax
+int negamax(state_t state, int depth, int color, bool use_tt){
+    generated++;
+    if (depth == 0 || state.terminal()){
+        return color * state.value();
+    }
+    int alpha = -INFINITY;
+    bool col = color + 1;
+    for(int move : state.moves(col)){
+        alpha = max(alpha , -negamax(state.move(col,move) , depth - 1, -color));
+    }
+    expanded++;
+    return alpha;
+}
+
+//Funcion que implementa el algoritmo negamax con poda alfa-beta
+int negamax(state_t state, int depth, int alpha, int beta, int color, bool use_tt){
+    generated++;
+    if (depth == 0 || state.terminal()){
+        return color * state.value();
+    }
+    int score = -INFINITY;
+    bool col = color + 1;
+    int val;
+    for(int move : state.moves(col)){
+        val = -negamax(state.move(col,move) , depth - 1, -beta, -alpha, -color);
+        score = max(score , val);
+        alpha = max(alpha , score);
+        if (alpha >= beta) break;
+    }
+    expanded++;
+    return score;
+}
+
+
+//Funcion que implementa TEST para el algoritmo scout
+bool test(state_t state, int depth, int color, int score, bool (*condition)(int,int)){
+    generated++;
+    if (depth == 0 || state.terminal()){
+        return condition(state.value(),score);
+    }
+    bool col = color + 1;
+    for(int move : state.moves(col)){
+        if (col && test(state.move(col,move) , depth - 1, -color, score , condition))
+            return true;
+        if (!col && !test(state.move(col,move) , depth - 1, -color, score , condition))
+            return false;
+    }
+    expanded++;
+    return !(col);
+}
+
+//Funcion que implementa el algoritmo scout
+int scout(state_t state, int depth, int color, bool use_tt){
+    generated++;
+    if (depth == 0 || state.terminal()){
+        return state.value();
+    }
+    int score = 0;
+    bool col = color + 1;
+    bool first = true;
+    for(int move : state.moves(col)){
+        state_t child = state.move(col,move);
+        if (first){
+            score = scout(child , depth - 1, -color);
+            first = false;
+        }
+        else{
+            if (col && test(child , depth, -color, score , greaterThan))
+                score = scout(child , depth - 1, -color);
+            if (!col && !test(child , depth, -color, score , greaterEqualThan))
+                score = scout(child , depth - 1, -color);
+        }
+    }
+    expanded++;
+    return score;
+}
+
+//Funcion que implementa el algoritmo negascout
+int negascout(state_t state, int depth, int alpha, int beta, int color, bool use_tt){
+    if (depth == 0 || state.terminal()){
+        return color * state.value();
+    }
+    bool col = color + 1;
+    bool first = true;
+    for(int move : state.moves(col)){
+        generated++;
+        state_t child = state.move(col,move);
+        int score;
+        if (first){
+            first = false;
+            score = -negascout(child, depth -1, -beta, -alpha, -color);
+        }
+        else{
+            score = -negascout(child, depth -1, -alpha - 1, -alpha, -color);
+            if (alpha < score && score < beta){
+                score = -negascout(child, depth -1, -beta, -score, -color);
+            }
+        }
+        alpha = max(alpha,score);
+        if (alpha >= beta)
+            break;
+    }
+    expanded++;
+    return alpha;
+}
 
 int main(int argc, const char **argv) {
     state_t pv[128];
     int npv = 0;
     for( int i = 0; PV[i] != -1; ++i ) ++npv;
 
-    int algorithm = 0;
+    int algorithm = 1;
     if( argc > 1 ) algorithm = atoi(argv[1]);
     bool use_tt = argc > 2;
 
@@ -83,10 +192,9 @@ int main(int argc, const char **argv) {
         cout << "Negascout";
     cout << (use_tt ? " w/ transposition table" : "") << endl;
 
-    // Run algorithm along PV (bacwards)
+    // Run algorithm along PV (backwards)
     cout << "Moving along PV:" << endl;
     for( int i = 0; i <= npv; ++i ) {
-        //cout << pv[i];
         int value = 0;
         TTable[0].clear();
         TTable[1].clear();
@@ -97,13 +205,13 @@ int main(int argc, const char **argv) {
 
         try {
             if( algorithm == 1 ) {
-                //value = negamax(pv[i], 0, color, use_tt);
+                value = negamax(pv[i], 33, color, use_tt);
             } else if( algorithm == 2 ) {
-                //value = negamax(pv[i], 0, -200, 200, color, use_tt);
+                value = negamax(pv[i], 33, -INFINITY, INFINITY, color, use_tt);
             } else if( algorithm == 3 ) {
-                //value = scout(pv[i], 0, color, use_tt);
+                value = color * scout(pv[i], 33, color, use_tt);
             } else if( algorithm == 4 ) {
-                //value = negascout(pv[i], 0, -200, 200, color, use_tt);
+                value = negascout(pv[i], 33, -INFINITY, INFINITY, color, use_tt);
             }
         } catch( const bad_alloc &e ) {
             cout << "size TT[0]: size=" << TTable[0].size() << ", #buckets=" << TTable[0].bucket_count() << endl;
@@ -112,6 +220,11 @@ int main(int argc, const char **argv) {
         }
 
         float elapsed_time = Utils::read_time_in_seconds() - start_time;
+        if (elapsed_time>=2){
+            printf("The time limit of %f seconds has expired\n",elapsed_time);
+            cout << "Total time : " << elapsed_time << " seconds" << endl;
+            break;
+        }
 
         cout << npv + 1 - i << ". " << (color == 1 ? "Black" : "White") << " moves: "
              << "value=" << color * value
@@ -119,6 +232,7 @@ int main(int argc, const char **argv) {
              << ", #generated=" << generated
              << ", seconds=" << elapsed_time
              << ", #generated/second=" << generated/elapsed_time
+             << ", #time=" << elapsed_time
              << endl;
     }
 
