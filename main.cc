@@ -158,7 +158,7 @@ int main(int argc, const char **argv) {
     int npv = 0;
     for( int i = 0; PV[i] != -1; ++i ) ++npv;
 
-    int algorithm = 1;
+    int algorithm = 4;
     if( argc > 1 ) algorithm = atoi(argv[1]);
     bool use_tt = argc > 2;
 
@@ -220,7 +220,7 @@ int main(int argc, const char **argv) {
         }
 
         float elapsed_time = Utils::read_time_in_seconds() - start_time;
-        if (elapsed_time>=2){
+        if (elapsed_time>=300){
             printf("The time limit of %f seconds has expired\n",elapsed_time);
             cout << "Total time : " << elapsed_time << " seconds" << endl;
             break;
